@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora Hidráulica — Sistemas de Bombeo</title>
+  <link rel="stylesheet" href="estilos.css">
+  <!-- CDN: Plotly.js -->
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <!-- CDN: jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- CDN: SheetJS -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════════════ -->
+<header class="app-header">
+  <span class="icono">⚙️</span>
+  <h1>Calculadora Hidráulica de Sistemas de Bombeo</h1>
+  <span class="subtitulo">— Análisis de ADT, NPSHd y selección de equipos</span>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════
+     NAVEGACIÓN DE PESTAÑAS
+══════════════════════════════════════════════════════════ -->
+<nav class="nav-pestanas">
+  <button class="btn-pestana activa" data-tab="tab-calculo">📐 Cálculo</button>
+  <button class="btn-pestana"        data-tab="tab-graficas">📈 Gráficas</button>
+  <button class="btn-pestana"        data-tab="tab-bombas">🔩 Selección de Bomba</button>
+  <button class="btn-pestana"        data-tab="tab-tablas">📋 Tablas de Datos</button>
+  <button class="btn-pestana"        data-tab="tab-exportar">📄 Exportar</button>
+  <button class="btn-pestana"        data-tab="tab-config">⚙️ Configuración</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════
+     PESTAÑA 1 — CÁLCULO
+══════════════════════════════════════════════════════════ -->
+<div id="tab-calculo" class="tab-contenido activa">
+  <div class="layout-calc">
+
+    <!-- Sidebar: Parámetros globales -->
+    <aside class="sidebar">
+      <div class="sec-titulo">Parámetros Globales</div>
+
+      <div class="campo">
+        <label>Caudal de diseño (Q)</label>
+        <div class="campo-con-unidad">
+          <input type="number" id="inp-Q" min="0.001" step="0.1" value="5">
+          <select id="sel-Q-und">
+            <option value="m3h">m³/h</option>
+            <option value="ls">L/s</option>
+            <option value="gpm">GPM</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Q mínimo (rango)</label>
+        <div class="campo-con-unidad">
+          <input type="number" id="inp-Q-min" min="0.001" step="0.1" value="3">
+          <span style="font-size:0.75rem;color:var(--gris-600);align-self:center">misma unidad</span>
+        </div>
+      </div>
+
+      <div class="campo">
+        <label>Q máximo (rango)</label>
+        <input type="number" id="inp-Q-max" min="0.001" step="0.1" value="10" style="width:100%">
+      </div>
+
+      <hr>
+
+      <div class="campo">
+        <label>Fluido</label>
+        <select id="sel-fluido" style="font-size:0.78rem"></select>
+      </div>
+
+      <div class="campo">
+        <label>Temperatura del fluido (°C)</label>
+        <input type="number" id="inp-temp" min="-20" max="150" step="1" value="20">
+      </div>
+
+      <hr>
+
+      <div class="campo">
+        <label>Número de tramos (2–5)</label>
+        <input type="number" id="inp-num-tramos" min="2" max="5" step="1" value="2">
+      </div>
+
+      <button class="btn btn-calcular" id="btn-calcular" style="width:100%;margin-top:6px">
+        ▶ CALCULAR
+      </button>
+
+      <div id="alerta-calc" style="margin-top:6px"></div>
+    </aside>
+
+    <!-- Área principal: tramos + resultados -->
+    <div class="area-principal">
+      <div id="contenedor-tramos"></div>
+
+      <!-- Resultados -->
+      <div id="zona-resultados" style="display:none">
+
+        <!-- Métricas destacadas -->
+        <div class="metricas-grid" id="metricas-grid"></div>
+
+        <!-- Tabla resumen por tramo -->
+        <div class="card">
+          <div class="card-header">📊 Resultados por Tramo</div>
+          <div class="card-body" style="padding:0">
+            <div class="tabla-wrapper">
+              <table id="tabla-resumen">
+                <thead>
+                  <tr>
+                    <th>Tramo</th>
+                    <th>Descripción</th>
+                    <th class="num">V (m/s)</th>
+                    <th class="num">Re</th>
+                    <th>Régimen</th>
+                    <th class="num">f</th>
+                    <th class="num">hf (m)</th>
+                    <th class="num">hs (m)</th>
+                    <th class="num">ΔP_sep (m)</th>
+                    <th class="num">ADT_p (m)</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-resumen"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PESTAÑA 2 — GRÁFICAS
+══════════════════════════════════════════════════════════ -->
+<div id="tab-graficas" class="tab-contenido tab-graficas">
+  <div class="graficas-grid">
+    <div class="grafica-card">
+      <div class="grafica-titulo">📈 ADT vs. Caudal Q — Curva del Sistema</div>
+      <div class="grafica-contenido" id="graf-adt-q"></div>
+    </div>
+    <div class="grafica-card">
+      <div class="grafica-titulo">📉 NPSHd vs. Caudal Q</div>
+      <div class="grafica-contenido" id="graf-npshd-q"></div>
+    </div>
+    <div class="grafica-card grafica-ancha">
+      <div class="grafica-titulo">📊 Pérdidas por Tramo (hf + hs + ΔP_sep)</div>
+      <div class="grafica-contenido" id="graf-barras"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PESTAÑA 3 — SELECCIÓN DE BOMBA COMERCIAL
+══════════════════════════════════════════════════════════ -->
+<div id="tab-bombas" class="tab-contenido tab-bombas">
+  <div class="bombas-layout">
+    <!-- Panel de selección -->
+    <div class="bombas-panel">
+      <div class="card">
+        <div class="card-header">🔩 Selección de Bomba</div>
+        <div class="card-body">
+          <div class="campo">
+            <label>Fabricante</label>
+            <div class="bombas-marcas" id="bombas-marcas"></div>
+          </div>
+          <div class="campo">
+            <label>Modelo</label>
+            <select id="sel-modelo-bomba" style="width:100%;font-size:0.8rem"></select>
+          </div>
+          <button class="btn btn-primario" id="btn-agregar-bomba" style="width:100%;margin-top:8px">
+            + Agregar al gráfico
+          </button>
+          <button class="btn btn-secundario" id="btn-limpiar-bombas" style="width:100%;margin-top:6px">
+            Limpiar modelos
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla comparativa -->
+      <div class="card" id="card-comparativa" style="display:none">
+        <div class="card-header">📋 Tabla Comparativa</div>
+        <div class="card-body" style="padding:0">
+          <div class="tabla-wrapper">
+            <table class="tabla-comparativa">
+              <thead>
+                <tr>
+                  <th>Modelo</th>
+                  <th class="num">Q_op (m³/h)</th>
+                  <th class="num">H_op (m)</th>
+                  <th class="num">ΔQ (%)</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-comparativa"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="alerta alerta-aviso" style="font-size:0.75rem">
+        ⚠ Las curvas H-Q son representativas. Verifique con el catálogo oficial del fabricante.
+      </div>
+    </div>
+
+    <!-- Gráfico de superposición -->
+    <div class="grafica-card">
+      <div class="grafica-titulo">📈 Curva del Sistema + Curvas H-Q de Bombas Comerciales</div>
+      <div class="grafica-contenido" id="graf-bombas" style="min-height:400px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PESTAÑA 4 — TABLAS DE DATOS
+══════════════════════════════════════════════════════════ -->
+<div id="tab-tablas" class="tab-contenido">
+  <div class="tablas-edicion" id="tablas-edicion-contenido"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PESTAÑA 5 — EXPORTAR
+══════════════════════════════════════════════════════════ -->
+<div id="tab-exportar" class="tab-contenido">
+  <div class="exportar-layout">
+    <div class="exportar-form">
+      <h2>📄 Exportar Memoria de Cálculo</h2>
+      <p style="font-size:0.8rem;color:var(--gris-600)">Complete los datos del proyecto antes de exportar.</p>
+
+      <div class="campo">
+        <label>Nombre del proyecto</label>
+        <input type="text" id="exp-nombre" placeholder="Sistema de bombeo PTARI Laguna 1">
+      </div>
+      <div class="campo">
+        <label>Descripción de la bomba</label>
+        <input type="text" id="exp-bomba" placeholder="Bomba centrífuga horizontal marca X">
+      </div>
+      <div class="campo">
+        <label>Tag de equipo</label>
+        <input type="text" id="exp-tag" placeholder="PU-101">
+      </div>
+      <div class="campo campo-con-unidad">
+        <div class="campo" style="margin:0">
+          <label>Versión</label>
+          <input type="text" id="exp-version" value="1.0">
+        </div>
+        <div class="campo" style="margin:0">
+          <label>Ingeniero</label>
+          <input type="text" id="exp-ingeniero" placeholder="K. Landauro">
+        </div>
+      </div>
+
+      <div id="alerta-export" style="margin-top:4px"></div>
+
+      <div class="exportar-botones">
+        <button class="btn btn-rojo" id="btn-pdf">
+          📄 Descargar PDF
+        </button>
+        <button class="btn btn-verde" id="btn-excel">
+          📊 Descargar Excel
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     PESTAÑA 6 — CONFIGURACIÓN
+══════════════════════════════════════════════════════════ -->
+<div id="tab-config" class="tab-contenido">
+  <div class="config-layout">
+    <div class="config-form">
+      <h2>⚙️ Configuración del Sistema</h2>
+      <p style="font-size:0.8rem;color:var(--gris-600);margin-bottom:16px">
+        Estas constantes son usadas por el motor de cálculo. Modifíquelas con precaución.
+      </p>
+
+      <fieldset class="config-grupo">
+        <legend>Presión Atmosférica</legend>
+        <div class="config-campo">
+          <label>Patm</label>
+          <input type="number" id="cfg-patm-val" value="101325" step="100">
+          <select id="cfg-patm-und">
+            <option value="Pa">Pa</option>
+            <option value="bar">bar</option>
+            <option value="atm">atm</option>
+          </select>
+        </div>
+      </fieldset>
+
+      <fieldset class="config-grupo">
+        <legend>Presión de Vapor</legend>
+        <div style="font-size:0.78rem;color:var(--gris-600);margin-top:8px">
+          Por defecto se calcula con la ecuación de Antoine (función de la temperatura).
+        </div>
+        <div class="config-campo" style="margin-top:8px">
+          <label>Pvapor (manual)</label>
+          <input type="number" id="cfg-pvap-val" placeholder="Auto" step="10">
+          <select id="cfg-pvap-und">
+            <option value="Pa">Pa</option>
+            <option value="bar">bar</option>
+          </select>
+        </div>
+        <div style="font-size:0.72rem;color:var(--gris-600);margin-top:4px">
+          Dejar en blanco para usar Antoine automático.
+        </div>
+      </fieldset>
+
+      <fieldset class="config-grupo">
+        <legend>Aceleración Gravitacional</legend>
+        <div class="config-campo">
+          <label>g</label>
+          <input type="number" id="cfg-g" value="9.81" step="0.001">
+          <span style="font-size:0.8rem;align-self:center">m/s²</span>
+        </div>
+      </fieldset>
+
+      <button class="btn btn-primario" id="btn-guardar-config" style="margin-top:8px">
+        💾 Guardar configuración
+      </button>
+      <div id="alerta-config" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCRIPTS
+══════════════════════════════════════════════════════════ -->
+<script src="datos.js"></script>
+<script src="calculos.js"></script>
+<script src="reportes.js"></script>
+
+<script>
+"use strict";
+
+// ══════════════════════════════════════════════════════════════
+// DATOS DE BOMBAS COMERCIALES (hardcoded — no fetch externo)
+// ══════════════════════════════════════════════════════════════
+
+const BOMBAS_COMERCIALES = {
+  Grundfos: [
+    {
+      modelo: 'CM1-5',
+      curva: [[0,10],[1,9.5],[2,8.8],[3,7.8],[4,6.4],[5,4.6],[6,2.5],[7,0]],
+      eta_max: 42,
+    },
+    {
+      modelo: 'CM3-8',
+      curva: [[0,18],[2,17],[4,15.2],[6,12.5],[8,9],[10,5],[12,1]],
+      eta_max: 52,
+    },
+    {
+      modelo: 'CM5-4',
+      curva: [[0,26],[2,25],[4,23],[6,20],[8,16],[10,11],[12,5],[14,0]],
+      eta_max: 58,
+    },
+    {
+      modelo: 'CR5-10',
+      curva: [[0,52],[2,50],[4,47],[6,42],[8,35],[10,26],[12,15],[13,5]],
+      eta_max: 55,
+    },
+    {
+      modelo: 'NK 32-160',
+      curva: [[0,38],[5,36],[10,32],[15,26],[20,17],[25,7]],
+      eta_max: 65,
+    },
+  ],
+  Pedrollo: [
+    {
+      modelo: 'CP 160',
+      curva: [[0,14],[1,13.5],[2,12.8],[3,11.7],[4,10.2],[5,8.2],[6,5.8],[7,3],[8,0]],
+      eta_max: 40,
+    },
+    {
+      modelo: 'F25/160A',
+      curva: [[0,22],[3,21],[5,19.5],[8,17],[10,14.5],[12,11],[14,7],[16,2]],
+      eta_max: 54,
+    },
+    {
+      modelo: '4SRm 4/8',
+      curva: [[0,28],[2,27],[4,25.5],[6,23],[8,19],[10,14],[12,8],[14,2]],
+      eta_max: 56,
+    },
+    {
+      modelo: 'F32/160A',
+      curva: [[0,32],[5,30],[10,26],[15,20],[18,14],[20,8],[22,2]],
+      eta_max: 60,
+    },
+    {
+      modelo: 'HFm 5A',
+      curva: [[0,40],[3,38],[5,36],[8,32],[10,28],[12,22],[14,15],[16,7]],
+      eta_max: 58,
+    },
+  ],
+};
+
+// Modelos actualmente graficados en Pestaña 3
+const bombasGraficadas = [];
+let marcaActivaBombas = 'Grundfos';
+
+// ══════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════
+
+function initTabs() {
+  document.querySelectorAll('.btn-pestana').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      document.querySelectorAll('.btn-pestana').forEach(b => b.classList.remove('activa'));
+      document.querySelectorAll('.tab-contenido').forEach(t => t.classList.remove('activa'));
+      btn.classList.add('activa');
+      document.getElementById(target).classList.add('activa');
+      if (target === 'tab-graficas')   actualizarGraficas();
+      if (target === 'tab-bombas')     actualizarGraficaBombas();
+      if (target === 'tab-tablas')     renderTablasEdicion();
+      if (target === 'tab-config')     cargarFormConfig();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// LEER ESTADO DESDE EL DOM (sidebar + tramos)
+// ══════════════════════════════════════════════════════════════
+
+function leerEstadoDesdeDOM() {
+  STATE.Q       = parseFloat(document.getElementById('inp-Q').value) || 5;
+  STATE.Q_unidad = document.getElementById('sel-Q-und').value;
+  STATE.Q_min   = parseFloat(document.getElementById('inp-Q-min').value) || 3;
+  STATE.Q_max   = parseFloat(document.getElementById('inp-Q-max').value) || 10;
+  STATE.fluido_idx = parseInt(document.getElementById('sel-fluido').value) || 0;
+  STATE.temperatura = parseFloat(document.getElementById('inp-temp').value) || 20;
+
+  // Leer cada tramo del DOM
+  for (let i = 0; i < STATE.tramos.length; i++) {
+    const t = STATE.tramos[i];
+    const pref = `tr${i}`;
+
+    const descEl  = document.getElementById(`${pref}-desc`);
+    const LEl     = document.getElementById(`${pref}-L`);
+    const LUndEl  = document.getElementById(`${pref}-L-und`);
+    const dzEl    = document.getElementById(`${pref}-dz`);
+    const dzUndEl = document.getElementById(`${pref}-dz-und`);
+    const diaEl   = document.getElementById(`${pref}-diam`);
+    const matEl   = document.getElementById(`${pref}-mat`);
+
+    if (descEl)  t.descripcion   = descEl.value;
+    if (LEl)     t.L             = parseFloat(LEl.value) || 0;
+    if (LUndEl)  t.L_unidad      = LUndEl.value;
+    if (dzEl)    t.dz            = parseFloat(dzEl.value) || 0;
+    if (dzUndEl) t.dz_unidad     = dzUndEl.value;
+    if (diaEl)   t.diametro_idx  = parseInt(diaEl.value) || 0;
+    if (matEl)   t.material_idx  = parseInt(matEl.value) || 0;
+
+    // Accesorios: leer de DOM
+    t.accesorios = [];
+    const accList = document.querySelectorAll(`[data-tramo="${i}"][data-acc-tipo]`);
+    accList.forEach(el => {
+      const rowIdx = el.dataset.accRow;
+      const tipo   = el.value;
+      const cantEl = document.querySelector(`[data-tramo="${i}"][data-acc-cant="${rowIdx}"]`);
+      if (tipo && cantEl) {
+        t.accesorios.push({ tipo, cantidad: parseInt(cantEl.value) || 1 });
+      }
+    });
+
+    // Reducción brusca
+    const redActEl = document.getElementById(`${pref}-red-activa`);
+    t.reduccion.activa = redActEl ? redActEl.checked : false;
+    if (t.reduccion.activa) {
+      t.reduccion.D_mayor  = parseFloat(document.getElementById(`${pref}-red-Dmayor`)?.value) || 0;
+      t.reduccion.D_menor  = parseFloat(document.getElementById(`${pref}-red-Dmenor`)?.value) || 0;
+      t.reduccion.cantidad = parseInt(document.getElementById(`${pref}-red-cant`)?.value) || 1;
+    }
+
+    // Separador
+    const sepActEl = document.getElementById(`${pref}-sep-activo`);
+    t.separador.activo = sepActEl ? sepActEl.checked : false;
+    if (t.separador.activo) {
+      t.separador.nombre    = document.getElementById(`${pref}-sep-nombre`)?.value || '';
+      t.separador.dP        = parseFloat(document.getElementById(`${pref}-sep-dp`)?.value) || 0;
+      t.separador.dP_unidad = document.getElementById(`${pref}-sep-dp-und`)?.value || 'bar';
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// RENDERIZAR PANELES DE TRAMO
+// ══════════════════════════════════════════════════════════════
+
+function renderTramos() {
+  const cont = document.getElementById('contenedor-tramos');
+  cont.innerHTML = '';
+
+  for (let i = 0; i < STATE.tramos.length; i++) {
+    const t = STATE.tramos[i];
+    cont.appendChild(crearPanelTramo(i, t));
+  }
+}
+
+function crearPanelTramo(i, t) {
+  const pref = `tr${i}`;
+  const div = document.createElement('details');
+  div.className = 'tramo-panel';
+  div.open = true;
+
+  // Opciones de diámetros y materiales
+  const opsDiam = STATE.diametros.map((d, idx) =>
+    `<option value="${idx}" ${idx === t.diametro_idx ? 'selected' : ''}>${d.nom} (Ø ${d.interno_mm} mm)</option>`
+  ).join('');
+
+  const opsMat = STATE.materiales.map((m, idx) =>
+    `<option value="${idx}" ${idx === t.material_idx ? 'selected' : ''}>${m.nombre} (ε=${m.rug} mm)</option>`
+  ).join('');
+
+  div.innerHTML = `
+    <summary>
+      <span>Tramo ${i + 1} — <span id="${pref}-label">${t.descripcion}</span></span>
+    </summary>
+    <div class="tramo-cuerpo">
+      <!-- Descripción -->
+      <div class="campo campo-full">
+        <label>Descripción del tramo</label>
+        <input type="text" id="${pref}-desc" value="${t.descripcion}"
+          oninput="document.getElementById('${pref}-label').textContent=this.value">
+      </div>
+
+      <!-- Longitud -->
+      <div class="campo">
+        <label>Longitud (L)</label>
+        <div class="campo-con-unidad">
+          <input type="number" id="${pref}-L" value="${t.L}" min="0" step="0.1">
+          <select id="${pref}-L-und">
+            <option value="m"  ${t.L_unidad === 'm'  ? 'selected' : ''}>m</option>
+            <option value="ft" ${t.L_unidad === 'ft' ? 'selected' : ''}>ft</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Δz -->
+      <div class="campo">
+        <label>Altura estática (Δz)</label>
+        <div class="campo-con-unidad">
+          <input type="number" id="${pref}-dz" value="${t.dz}" step="0.1">
+          <select id="${pref}-dz-und">
+            <option value="m"  ${t.dz_unidad === 'm'  ? 'selected' : ''}>m</option>
+            <option value="ft" ${t.dz_unidad === 'ft' ? 'selected' : ''}>ft</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Diámetro -->
+      <div class="campo">
+        <label>Diámetro nominal</label>
+        <select id="${pref}-diam" style="font-size:0.78rem">${opsDiam}</select>
+      </div>
+
+      <!-- Material -->
+      <div class="campo">
+        <label>Material (rugosidad)</label>
+        <select id="${pref}-mat" style="font-size:0.78rem">${opsMat}</select>
+      </div>
+
+      <!-- Accesorios -->
+      <div class="accesorios-section campo-full">
+        <div class="accesorios-titulo">Accesorios locales</div>
+        <div class="acc-lista" id="${pref}-acc-lista">${renderAccesorios(i, t.accesorios)}</div>
+        <button class="btn btn-secundario btn-sm" onclick="agregarAccesorio(${i})">
+          + Agregar accesorio
+        </button>
+      </div>
+
+      <!-- Reducción brusca -->
+      <details class="opt-section campo-full" id="${pref}-red-details">
+        <summary>Reducción brusca (opcional)</summary>
+        <div class="opt-section-body">
+          <div class="campo" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:8px">
+            <input type="checkbox" id="${pref}-red-activa" ${t.reduccion.activa ? 'checked' : ''}>
+            <label for="${pref}-red-activa">Incluir reducción brusca</label>
+          </div>
+          <div class="campo">
+            <label>D_mayor (mm)</label>
+            <input type="number" id="${pref}-red-Dmayor" value="${t.reduccion.D_mayor || ''}" min="0">
+          </div>
+          <div class="campo">
+            <label>D_menor (mm)</label>
+            <input type="number" id="${pref}-red-Dmenor" value="${t.reduccion.D_menor || ''}" min="0">
+          </div>
+          <div class="campo">
+            <label>Cantidad</label>
+            <input type="number" id="${pref}-red-cant" value="${t.reduccion.cantidad || 1}" min="1">
+          </div>
+        </div>
+      </details>
+
+      <!-- Elemento separador -->
+      <details class="opt-section campo-full" id="${pref}-sep-details">
+        <summary>Elemento separador / ΔP adicional (opcional)</summary>
+        <div class="opt-section-body">
+          <div class="campo" style="grid-column:1/-1;flex-direction:row;align-items:center;gap:8px">
+            <input type="checkbox" id="${pref}-sep-activo" ${t.separador.activo ? 'checked' : ''}>
+            <label for="${pref}-sep-activo">Incluir caída de presión</label>
+          </div>
+          <div class="campo">
+            <label>Nombre del elemento</label>
+            <input type="text" id="${pref}-sep-nombre" value="${t.separador.nombre || ''}" placeholder="Ej: Filtro de arena">
+          </div>
+          <div class="campo">
+            <label>ΔP</label>
+            <div class="campo-con-unidad">
+              <input type="number" id="${pref}-sep-dp" value="${t.separador.dP || ''}" min="0" step="0.01">
+              <select id="${pref}-sep-dp-und">
+                <option value="bar" ${(t.separador.dP_unidad||'bar')==='bar' ? 'selected' : ''}>bar</option>
+                <option value="psi" ${(t.separador.dP_unidad||'')==='psi' ? 'selected' : ''}>psi</option>
+                <option value="kPa" ${(t.separador.dP_unidad||'')==='kPa' ? 'selected' : ''}>kPa</option>
+                <option value="Pa"  ${(t.separador.dP_unidad||'')==='Pa'  ? 'selected' : ''}>Pa</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+  `;
+  return div;
+}
+
+function renderAccesorios(tramoIdx, accesorios) {
+  if (!accesorios || accesorios.length === 0) return '';
+  return accesorios.map((a, ri) => crearFilaAccHTML(tramoIdx, ri, a)).join('');
+}
+
+function crearFilaAccHTML(tramoIdx, rowIdx, acc) {
+  const tiposOptions = Object.keys(STATE.k_accesorios).map(t =>
+    `<option value="${t}" ${t === acc.tipo ? 'selected' : ''}>${t} (K=${STATE.k_accesorios[t]})</option>`
+  ).join('');
+  return `
+    <div class="acc-fila" id="tr${tramoIdx}-acc-${rowIdx}">
+      <select data-tramo="${tramoIdx}" data-acc-tipo data-acc-row="${rowIdx}">
+        ${tiposOptions}
+      </select>
+      <input type="number" min="1" step="1" value="${acc.cantidad || 1}"
+        data-tramo="${tramoIdx}" data-acc-cant="${rowIdx}">
+      <button class="btn btn-rojo btn-xs" onclick="eliminarAccesorio(${tramoIdx},${rowIdx})">×</button>
+    </div>`;
+}
+
+let _accCounter = 100;
+
+function agregarAccesorio(tramoIdx) {
+  leerEstadoDesdeDOM();
+  STATE.tramos[tramoIdx].accesorios.push({ tipo: 'Codo 90°', cantidad: 1 });
+  const lista = document.getElementById(`tr${tramoIdx}-acc-lista`);
+  const rowIdx = ++_accCounter;
+  const newAcc = { tipo: 'Codo 90°', cantidad: 1 };
+  lista.insertAdjacentHTML('beforeend', crearFilaAccHTML(tramoIdx, rowIdx, newAcc));
+}
+
+function eliminarAccesorio(tramoIdx, rowIdx) {
+  const el = document.getElementById(`tr${tramoIdx}-acc-${rowIdx}`);
+  if (el) el.remove();
+}
+
+// ══════════════════════════════════════════════════════════════
+// POBLAR SELECT DE FLUIDOS
+// ══════════════════════════════════════════════════════════════
+
+function poblarSelectFluido() {
+  const sel = document.getElementById('sel-fluido');
+  sel.innerHTML = STATE.fluidos.map((f, i) =>
+    `<option value="${i}" ${i === STATE.fluido_idx ? 'selected' : ''}>${f.nombre}</option>`
+  ).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// MOSTRAR RESULTADOS EN PESTAÑA 1
+// ══════════════════════════════════════════════════════════════
+
+function mostrarResultados(res) {
+  const { principal } = res;
+  const zona = document.getElementById('zona-resultados');
+  zona.style.display = '';
+
+  // Métricas
+  const adt = principal.ADT_total;
+  const npsh = principal.NPSHd;
+  const npshClass = npsh < 0 ? 'rojo' : npsh < 3 ? 'naranja' : 'verde';
+
+  document.getElementById('metricas-grid').innerHTML = `
+    <div class="metrica-caja azul">
+      <div class="metrica-label">ADT Total del Sistema</div>
+      <div class="metrica-valor">${fmt(adt, 3)}</div>
+      <div class="metrica-unidad">metros de columna (m)</div>
+    </div>
+    <div class="metrica-caja ${npshClass}">
+      <div class="metrica-label">NPSHd Disponible</div>
+      <div class="metrica-valor">${fmt(npsh, 3)}</div>
+      <div class="metrica-unidad">metros de columna (m)</div>
+    </div>
+    <div class="metrica-caja naranja">
+      <div class="metrica-label">Caudal de Diseño (Q)</div>
+      <div class="metrica-valor">${fmt(principal.Q_m3h, 3)}</div>
+      <div class="metrica-unidad">m³/h</div>
+    </div>
+    <div class="metrica-caja azul">
+      <div class="metrica-label">Pvapor (Antoine)</div>
+      <div class="metrica-valor">${fmt(principal.Pvapor_Pa, 0)}</div>
+      <div class="metrica-unidad">Pa</div>
+    </div>
+  `;
+
+  // Alerta NPSHd negativo
+  const alertEl = document.getElementById('alerta-calc');
+  if (npsh < 0) {
+    alertEl.innerHTML = `<div class="alerta alerta-error">⚠ NPSHd negativo (${fmt(npsh,3)} m) — riesgo de cavitación. Revise condiciones de succión.</div>`;
+  } else if (npsh < 3) {
+    alertEl.innerHTML = `<div class="alerta alerta-aviso">⚠ NPSHd reducido (${fmt(npsh,3)} m). Verifique margen de seguridad con el NPSHr de la bomba.</div>`;
+  } else {
+    alertEl.innerHTML = '';
+  }
+
+  // Tabla resumen
+  const tbody = document.getElementById('tbody-resumen');
+  let html = '';
+  let sumHf = 0, sumHs = 0, sumSep = 0, sumADT = 0;
+  for (const tr of principal.tramos) {
+    const badgeClass = tr.regimen === 'Laminar' ? 'badge-laminar'
+      : tr.regimen === 'Turbulento' ? 'badge-turbulento' : 'badge-transicion';
+    html += `
+      <tr>
+        <td>${tr.idx + 1}</td>
+        <td>${tr.descripcion}</td>
+        <td class="num">${fmt(tr.V, 3)}</td>
+        <td class="num">${fmt0(tr.Re)}</td>
+        <td><span class="badge ${badgeClass}">${tr.regimen}</span></td>
+        <td class="num">${fmt(tr.f, 5)}</td>
+        <td class="num">${fmt(tr.hf, 3)}</td>
+        <td class="num">${fmt(tr.hs, 3)}</td>
+        <td class="num">${fmt(tr.dP_sep_m, 3)}</td>
+        <td class="num dest">${fmt(tr.ADT_tramo, 3)}</td>
+      </tr>`;
+    sumHf  += tr.hf;
+    sumHs  += tr.hs;
+    sumSep += tr.dP_sep_m;
+    sumADT += tr.ADT_tramo;
+  }
+  html += `
+    <tr class="fila-total">
+      <td colspan="2">TOTAL</td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td>—</td>
+      <td class="num">—</td>
+      <td class="num">${fmt(sumHf, 3)}</td>
+      <td class="num">${fmt(sumHs, 3)}</td>
+      <td class="num">${fmt(sumSep, 3)}</td>
+      <td class="num dest">${fmt(sumADT, 3)}</td>
+    </tr>`;
+  tbody.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════
+// BOTÓN CALCULAR
+// ══════════════════════════════════════════════════════════════
+
+function onCalcular() {
+  try {
+    leerEstadoDesdeDOM();
+    guardarEnLocalStorage();
+    const res = calcular();
+    mostrarResultados(res);
+    actualizarGraficas();
+    actualizarGraficaBombas();
+  } catch (e) {
+    document.getElementById('alerta-calc').innerHTML =
+      `<div class="alerta alerta-error">❌ ${e.message}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 2 — GRÁFICAS (Plotly)
+// ══════════════════════════════════════════════════════════════
+
+function actualizarGraficas() {
+  if (!STATE.resultados) return;
+  const { principal, rango } = STATE.resultados;
+
+  const Qs   = rango.map(p => p.Q_m3h);
+  const ADTs = rango.map(p => p.ADT);
+  const NSPHds = rango.map(p => p.NPSHd);
+
+  // ── Gráfica 1: ADT vs Q ──────────────────────────────────
+  Plotly.react('graf-adt-q', [{
+    x: Qs, y: ADTs, mode: 'lines+markers',
+    name: 'ADT sistema',
+    line: { color: '#1565c0', width: 2.5 },
+    marker: { size: 7, color: '#1565c0' },
+    fill: 'tozeroy', fillcolor: 'rgba(21,101,192,0.08)',
+  }, {
+    x: [principal.Q_m3h], y: [principal.ADT_total],
+    mode: 'markers', name: 'Punto de diseño',
+    marker: { size: 12, color: '#e65100', symbol: 'star' },
+  }], {
+    xaxis: { title: 'Q (m³/h)', gridcolor: '#eee' },
+    yaxis: { title: 'ADT (m)', gridcolor: '#eee' },
+    plot_bgcolor: '#fff', paper_bgcolor: '#fff',
+    margin: { t: 20, r: 20, b: 50, l: 55 },
+    legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(255,255,255,0.8)' },
+    hovermode: 'x unified',
+  }, { responsive: true });
+
+  // ── Gráfica 2: NPSHd vs Q ────────────────────────────────
+  Plotly.react('graf-npshd-q', [{
+    x: Qs, y: NSPHds, mode: 'lines+markers',
+    name: 'NPSHd',
+    line: { color: '#2e7d32', width: 2.5 },
+    marker: { size: 7, color: '#2e7d32' },
+  }, {
+    x: [principal.Q_m3h], y: [principal.NPSHd],
+    mode: 'markers', name: 'Punto de diseño',
+    marker: { size: 12, color: '#e65100', symbol: 'star' },
+  }], {
+    xaxis: { title: 'Q (m³/h)', gridcolor: '#eee' },
+    yaxis: { title: 'NPSHd (m)', gridcolor: '#eee', zeroline: true, zerolinecolor: '#b71c1c', zerolinewidth: 1.5 },
+    plot_bgcolor: '#fff', paper_bgcolor: '#fff',
+    margin: { t: 20, r: 20, b: 50, l: 55 },
+    legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(255,255,255,0.8)' },
+    hovermode: 'x unified',
+  }, { responsive: true });
+
+  // ── Gráfica 3: Barras apiladas por tramo ─────────────────
+  const nombres  = principal.tramos.map(t => `T${t.idx+1}: ${t.descripcion}`);
+  const hfVals   = principal.tramos.map(t => +t.hf.toFixed(4));
+  const hsVals   = principal.tramos.map(t => +t.hs.toFixed(4));
+  const sepVals  = principal.tramos.map(t => +t.dP_sep_m.toFixed(4));
+  const dzVals   = principal.tramos.map(t => +Math.max(0, t.dz_m).toFixed(4));
+
+  Plotly.react('graf-barras', [
+    { x: nombres, y: dzVals,  type: 'bar', name: 'Δz positivo (m)', marker: { color: '#90caf9' } },
+    { x: nombres, y: hfVals,  type: 'bar', name: 'hf - fricción (m)', marker: { color: '#1565c0' } },
+    { x: nombres, y: hsVals,  type: 'bar', name: 'hs - menores (m)',  marker: { color: '#e65100' } },
+    { x: nombres, y: sepVals, type: 'bar', name: 'ΔP_sep (m)',        marker: { color: '#6a1b9a' } },
+  ], {
+    barmode: 'stack',
+    xaxis: { title: '', gridcolor: '#eee' },
+    yaxis: { title: 'Pérdidas (m)', gridcolor: '#eee' },
+    plot_bgcolor: '#fff', paper_bgcolor: '#fff',
+    margin: { t: 20, r: 20, b: 60, l: 55 },
+    legend: { orientation: 'h', y: -0.2 },
+  }, { responsive: true });
+}
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 3 — SELECCIÓN DE BOMBA
+// ══════════════════════════════════════════════════════════════
+
+function initBombas() {
+  const marcasDiv = document.getElementById('bombas-marcas');
+  Object.keys(BOMBAS_COMERCIALES).forEach(marca => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-marca' + (marca === marcaActivaBombas ? ' activa' : '');
+    btn.textContent = marca;
+    btn.onclick = () => {
+      marcaActivaBombas = marca;
+      document.querySelectorAll('.btn-marca').forEach(b => b.classList.remove('activa'));
+      btn.classList.add('activa');
+      poblarSelectModelos();
+    };
+    marcasDiv.appendChild(btn);
+  });
+  poblarSelectModelos();
+
+  document.getElementById('btn-agregar-bomba').onclick = () => {
+    const idx = parseInt(document.getElementById('sel-modelo-bomba').value);
+    const modelo = BOMBAS_COMERCIALES[marcaActivaBombas][idx];
+    if (modelo) {
+      const exists = bombasGraficadas.find(b => b.marca === marcaActivaBombas && b.modelo === modelo.modelo);
+      if (!exists) {
+        bombasGraficadas.push({ marca: marcaActivaBombas, ...modelo });
+        actualizarGraficaBombas();
+      }
+    }
+  };
+
+  document.getElementById('btn-limpiar-bombas').onclick = () => {
+    bombasGraficadas.length = 0;
+    actualizarGraficaBombas();
+  };
+}
+
+function poblarSelectModelos() {
+  const sel = document.getElementById('sel-modelo-bomba');
+  const modelos = BOMBAS_COMERCIALES[marcaActivaBombas] || [];
+  sel.innerHTML = modelos.map((m, i) => `<option value="${i}">${m.modelo}</option>`).join('');
+}
+
+function interpolarPtoOperacion(curvaQ, curvaH, curSistQ, curSistH) {
+  // Encuentra intersección por interpolación lineal entre puntos adyacentes
+  for (let i = 0; i < curSistQ.length - 1; i++) {
+    const Q1 = curSistQ[i], Q2 = curSistQ[i + 1];
+    const Hs1 = curSistH[i], Hs2 = curSistH[i + 1];
+    // Interpolar H bomba en esos caudales
+    const Hb1 = interpolarCurva(curvaQ, curvaH, Q1);
+    const Hb2 = interpolarCurva(curvaQ, curvaH, Q2);
+    if (Hb1 === null || Hb2 === null) continue;
+    const dif1 = Hb1 - Hs1;
+    const dif2 = Hb2 - Hs2;
+    if (dif1 * dif2 < 0) {
+      // Cambio de signo → hay intersección
+      const t = dif1 / (dif1 - dif2);
+      const Q_op = Q1 + t * (Q2 - Q1);
+      const H_op = Hs1 + t * (Hs2 - Hs1);
+      return { Q: Q_op, H: H_op };
+    }
+  }
+  return null;
+}
+
+function interpolarCurva(xs, ys, x) {
+  if (x < xs[0] || x > xs[xs.length - 1]) return null;
+  for (let i = 0; i < xs.length - 1; i++) {
+    if (x >= xs[i] && x <= xs[i + 1]) {
+      const t = (x - xs[i]) / (xs[i + 1] - xs[i]);
+      return ys[i] + t * (ys[i + 1] - ys[i]);
+    }
+  }
+  return null;
+}
+
+function actualizarGraficaBombas() {
+  const trazas = [];
+  const COLORES = ['#c62828','#2e7d32','#6a1b9a','#e65100','#0277bd','#37474f'];
+  const tbodyComp = document.getElementById('tbody-comparativa');
+  const cardComp  = document.getElementById('card-comparativa');
+  let filaComp = '';
+
+  // Curva del sistema
+  let sysQ = [], sysH = [];
+  if (STATE.resultados) {
+    const { rango, principal } = STATE.resultados;
+    sysQ = rango.map(p => p.Q_m3h);
+    sysH = rango.map(p => p.ADT);
+    trazas.push({
+      x: sysQ, y: sysH, mode: 'lines', name: 'Sistema',
+      line: { color: '#1565c0', width: 3, dash: 'solid' },
+      fill: 'tozeroy', fillcolor: 'rgba(21,101,192,0.06)',
+    });
+    trazas.push({
+      x: [principal.Q_m3h], y: [principal.ADT_total],
+      mode: 'markers', name: 'Diseño',
+      marker: { size: 12, color: '#1565c0', symbol: 'star' },
+      showlegend: false,
+    });
+  }
+
+  // Bombas graficadas
+  bombasGraficadas.forEach((b, bi) => {
+    const bQs = b.curva.map(p => p[0]);
+    const bHs = b.curva.map(p => p[1]);
+    const color = COLORES[bi % COLORES.length];
+    trazas.push({
+      x: bQs, y: bHs, mode: 'lines+markers',
+      name: `${b.marca} ${b.modelo}`,
+      line: { color, width: 2, dash: 'solid' },
+      marker: { size: 5, color },
+    });
+
+    // Punto de operación
+    if (sysQ.length > 0) {
+      const op = interpolarPtoOperacion(bQs, bHs, sysQ, sysH);
+      if (op) {
+        trazas.push({
+          x: [op.Q], y: [op.H], mode: 'markers',
+          name: `Op. ${b.modelo}`, showlegend: true,
+          marker: { size: 14, color, symbol: 'circle', line: { color: '#fff', width: 2 } },
+        });
+        const Qdis = STATE.resultados?.principal?.Q_m3h || 0;
+        const delta = Qdis > 0 ? ((op.Q - Qdis) / Qdis * 100) : 0;
+        filaComp += `
+          <tr>
+            <td>${b.marca} ${b.modelo}</td>
+            <td class="num">${fmt(op.Q, 2)}</td>
+            <td class="num">${fmt(op.H, 2)}</td>
+            <td class="num ${Math.abs(delta) > 15 ? 'dest' : ''}">${delta >= 0 ? '+' : ''}${fmt(delta,1)}%</td>
+          </tr>`;
+      }
+    }
+  });
+
+  Plotly.react('graf-bombas', trazas, {
+    xaxis: { title: 'Q (m³/h)', gridcolor: '#eee', rangemode: 'tozero' },
+    yaxis: { title: 'H (m)',    gridcolor: '#eee', rangemode: 'tozero' },
+    plot_bgcolor: '#fff', paper_bgcolor: '#fff',
+    margin: { t: 20, r: 20, b: 50, l: 55 },
+    legend: { x: 0.99, y: 0.99, xanchor: 'right', bgcolor: 'rgba(255,255,255,0.9)' },
+    hovermode: 'closest',
+  }, { responsive: true });
+
+  if (filaComp) {
+    tbodyComp.innerHTML = filaComp;
+    cardComp.style.display = '';
+  } else {
+    cardComp.style.display = 'none';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 4 — TABLAS DE DATOS EDITABLES
+// ══════════════════════════════════════════════════════════════
+
+function renderTablasEdicion() {
+  const cont = document.getElementById('tablas-edicion-contenido');
+  cont.innerHTML = '';
+  cont.appendChild(crearTablaEditable('Fluidos', 'fluidos',
+    ['Nombre', 'Concentración (%)', 'Temp. (°C)', 'Densidad (kg/L)', 'Viscosidad (cP)'],
+    ['nombre', 'conc', 'temp', 'dens', 'visc'],
+    STATE.fluidos
+  ));
+  cont.appendChild(crearTablaEditable('Materiales', 'materiales',
+    ['Nombre', 'Rugosidad (mm)'],
+    ['nombre', 'rug'],
+    STATE.materiales
+  ));
+  cont.appendChild(crearTablaEditable('Diámetros', 'diametros',
+    ['Nominal', 'Interno (pulg.)', 'Interno (mm)'],
+    ['nom', 'interno_in', 'interno_mm'],
+    STATE.diametros
+  ));
+  // K accesorios como tabla especial
+  cont.appendChild(crearTablaK());
+}
+
+function crearTablaEditable(titulo, key, headers, campos, datos) {
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+
+  const renderFila = (fila, fi) => {
+    const tds = campos.map(c => `<td><input type="${typeof fila[c]==='number'?'number':'text'}" step="any" value="${fila[c]}"
+      oninput="STATE.${key}[${fi}].${c}=isNaN(parseFloat(this.value))?this.value:parseFloat(this.value);guardarEnLocalStorage()"></td>`).join('');
+    return `<tr id="${key}-fila-${fi}">${tds}<td><button class="btn btn-rojo btn-xs" onclick="eliminarFilaTabla('${key}',${fi})">×</button></td></tr>`;
+  };
+
+  const ths = headers.map(h => `<th>${h}</th>`).join('');
+
+  wrap.innerHTML = `
+    <div class="card-header">📋 ${titulo}</div>
+    <div class="card-body">
+      <div class="tabla-ed-header">
+        <h3></h3>
+        <div class="tabla-ed-acciones">
+          <button class="btn btn-secundario btn-sm" onclick="agregarFilaTabla('${key}')">+ Agregar fila</button>
+          <button class="btn btn-verde btn-sm" onclick="exportarTablaXLSX('${key}','${titulo}')">⬇ Exportar .xlsx</button>
+          <label class="btn btn-naranja btn-sm" style="cursor:pointer">
+            ⬆ Importar .xlsx
+            <input type="file" accept=".xlsx" style="display:none" onchange="importarTablaXLSX(event,'${key}')">
+          </label>
+        </div>
+      </div>
+      <div class="tabla-wrapper">
+        <table>
+          <thead><tr>${ths}<th style="width:36px"></th></tr></thead>
+          <tbody id="${key}-tbody">
+            ${datos.map((f, fi) => renderFila(f, fi)).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  return wrap;
+}
+
+function crearTablaK() {
+  const wrap = document.createElement('div');
+  wrap.className = 'card';
+  const rows = Object.entries(STATE.k_accesorios).map(([tipo, k], i) =>
+    `<tr><td><input type="text" value="${tipo}"
+        oninput="actualizarK_tipo(${i},this.value)"></td>
+      <td><input type="number" step="0.01" value="${k}"
+        oninput="STATE.k_accesorios['${tipo}']=parseFloat(this.value)||0;guardarEnLocalStorage()"></td>
+      <td><button class="btn btn-rojo btn-xs" onclick="eliminarK('${tipo}')">×</button></td></tr>`
+  ).join('');
+
+  wrap.innerHTML = `
+    <div class="card-header">📋 Coeficientes K de Accesorios</div>
+    <div class="card-body">
+      <div class="tabla-ed-header">
+        <h3></h3>
+        <div class="tabla-ed-acciones">
+          <button class="btn btn-secundario btn-sm" onclick="agregarK()">+ Agregar</button>
+        </div>
+      </div>
+      <div class="tabla-wrapper">
+        <table>
+          <thead><tr><th>Tipo de accesorio</th><th>K</th><th></th></tr></thead>
+          <tbody id="k-tbody">${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  return wrap;
+}
+
+function eliminarFilaTabla(key, fi) {
+  STATE[key].splice(fi, 1);
+  guardarEnLocalStorage();
+  renderTablasEdicion();
+}
+
+function agregarFilaTabla(key) {
+  const plantillas = {
+    fluidos:   { nombre: 'Nuevo fluido', conc: 0, temp: 20, dens: 1.0, visc: 1.0 },
+    materiales:{ nombre: 'Nuevo material', rug: 0.01 },
+    diametros: { nom: 'DN X', interno_in: 1.0, interno_mm: 25.4 },
+  };
+  STATE[key].push({ ...plantillas[key] });
+  guardarEnLocalStorage();
+  renderTablasEdicion();
+}
+
+let _kTiposMap = {};
+function actualizarK_tipo(idx, nuevoTipo) {
+  // Actualizar key en k_accesorios
+  const entries = Object.entries(STATE.k_accesorios);
+  if (entries[idx]) {
+    const viejo = entries[idx][0];
+    const val   = entries[idx][1];
+    const newObj = {};
+    entries.forEach(([k, v], i) => { newObj[i === idx ? nuevoTipo : k] = v; });
+    STATE.k_accesorios = newObj;
+    guardarEnLocalStorage();
+  }
+}
+function eliminarK(tipo) {
+  delete STATE.k_accesorios[tipo];
+  guardarEnLocalStorage();
+  renderTablasEdicion();
+}
+function agregarK() {
+  STATE.k_accesorios['Nuevo accesorio'] = 1.0;
+  guardarEnLocalStorage();
+  renderTablasEdicion();
+}
+
+// ── Export / Import tablas ────────────────────────────────────
+
+function exportarTablaXLSX(key, titulo) {
+  if (typeof XLSX === 'undefined') { alert('SheetJS no disponible'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(STATE[key]);
+  XLSX.utils.book_append_sheet(wb, ws, titulo);
+  XLSX.writeFile(wb, `tabla_${key}.xlsx`);
+}
+
+function importarTablaXLSX(event, key) {
+  if (typeof XLSX === 'undefined') { alert('SheetJS no disponible'); return; }
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws);
+      STATE[key] = data;
+      guardarEnLocalStorage();
+      renderTablasEdicion();
+      poblarSelectFluido();
+    } catch (err) {
+      alert('Error al importar el archivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 5 — EXPORTAR
+// ══════════════════════════════════════════════════════════════
+
+function obtenerInfoProyecto() {
+  return {
+    nombre:    document.getElementById('exp-nombre').value.trim(),
+    bomba:     document.getElementById('exp-bomba').value.trim(),
+    tag:       document.getElementById('exp-tag').value.trim(),
+    version:   document.getElementById('exp-version').value.trim(),
+    ingeniero: document.getElementById('exp-ingeniero').value.trim(),
+  };
+}
+
+function mostrarAlertaExport(msg, tipo = 'error') {
+  document.getElementById('alerta-export').innerHTML =
+    `<div class="alerta alerta-${tipo}">${msg}</div>`;
+  setTimeout(() => { document.getElementById('alerta-export').innerHTML = ''; }, 5000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('btn-pdf').onclick = async () => {
+    if (!STATE.resultados) { mostrarAlertaExport('❌ Calcule el sistema primero (Pestaña 1).'); return; }
+    try {
+      mostrarAlertaExport('⏳ Generando PDF…', 'aviso');
+      await generarPDF(obtenerInfoProyecto());
+      mostrarAlertaExport('✅ PDF descargado correctamente.', 'ok');
+    } catch (e) {
+      mostrarAlertaExport('❌ ' + e.message);
+    }
+  };
+
+  document.getElementById('btn-excel').onclick = () => {
+    if (!STATE.resultados) { mostrarAlertaExport('❌ Calcule el sistema primero (Pestaña 1).'); return; }
+    try {
+      generarExcel(obtenerInfoProyecto());
+      mostrarAlertaExport('✅ Excel descargado correctamente.', 'ok');
+    } catch (e) {
+      mostrarAlertaExport('❌ ' + e.message);
+    }
+  };
+});
+
+// ══════════════════════════════════════════════════════════════
+// PESTAÑA 6 — CONFIGURACIÓN
+// ══════════════════════════════════════════════════════════════
+
+function cargarFormConfig() {
+  // Patm — convertir de Pa a la unidad guardada
+  document.getElementById('cfg-patm-val').value = CONFIG.Patm;
+  document.getElementById('cfg-patm-und').value = 'Pa';
+  document.getElementById('cfg-pvap-val').value = CONFIG.Pvapor_override !== null ? CONFIG.Pvapor_override : '';
+  document.getElementById('cfg-g').value = CONFIG.g;
+}
+
+function guardarConfig() {
+  const patmVal = parseFloat(document.getElementById('cfg-patm-val').value) || 101325;
+  const patmUnd = document.getElementById('cfg-patm-und').value;
+  CONFIG.Patm = convertirPresion(patmVal, patmUnd);
+
+  const pvapRaw = document.getElementById('cfg-pvap-val').value.trim();
+  if (pvapRaw === '' || pvapRaw === null) {
+    CONFIG.Pvapor_override = null;
+  } else {
+    const pvapVal = parseFloat(pvapRaw) || 0;
+    const pvapUnd = document.getElementById('cfg-pvap-und').value;
+    CONFIG.Pvapor_override = convertirPresion(pvapVal, pvapUnd);
+  }
+
+  CONFIG.g = parseFloat(document.getElementById('cfg-g').value) || 9.81;
+  guardarEnLocalStorage();
+
+  const alertEl = document.getElementById('alerta-config');
+  alertEl.innerHTML = '<div class="alerta alerta-ok">✅ Configuración guardada.</div>';
+  setTimeout(() => { alertEl.innerHTML = ''; }, 3000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// MANEJAR CAMBIO EN NÚMERO DE TRAMOS
+// ══════════════════════════════════════════════════════════════
+
+function onCambiarNumTramos() {
+  const n = Math.min(5, Math.max(2, parseInt(document.getElementById('inp-num-tramos').value) || 2));
+  document.getElementById('inp-num-tramos').value = n;
+
+  leerEstadoDesdeDOM();  // guardar estado actual de tramos existentes
+
+  // Ajustar array de tramos
+  while (STATE.tramos.length < n) {
+    STATE.tramos.push(_tramoVacio(STATE.tramos.length));
+  }
+  STATE.tramos = STATE.tramos.slice(0, n);
+  STATE.num_tramos = n;
+
+  renderTramos();
+  poblarSelectFluido();
+}
+
+// ══════════════════════════════════════════════════════════════
+// CARGAR ESTADO AL DOM (sidebar)
+// ══════════════════════════════════════════════════════════════
+
+function cargarEstadoAlDOM() {
+  document.getElementById('inp-Q').value        = STATE.Q;
+  document.getElementById('sel-Q-und').value    = STATE.Q_unidad;
+  document.getElementById('inp-Q-min').value    = STATE.Q_min;
+  document.getElementById('inp-Q-max').value    = STATE.Q_max;
+  document.getElementById('inp-temp').value     = STATE.temperatura;
+  document.getElementById('inp-num-tramos').value = STATE.num_tramos;
+  poblarSelectFluido();
+  document.getElementById('sel-fluido').value   = STATE.fluido_idx;
+}
+
+// ══════════════════════════════════════════════════════════════
+// INICIALIZACIÓN PRINCIPAL
+// ══════════════════════════════════════════════════════════════
+
+window.addEventListener('DOMContentLoaded', () => {
+  cargarDesdeLocalStorage();
+  cargarEstadoAlDOM();
+  renderTramos();
+  initTabs();
+  initBombas();
+
+  // Evento: botón calcular
+  document.getElementById('btn-calcular').addEventListener('click', onCalcular);
+
+  // Evento: cambio en número de tramos
+  document.getElementById('inp-num-tramos').addEventListener('change', onCambiarNumTramos);
+
+  // Evento: guardar config
+  document.getElementById('btn-guardar-config').addEventListener('click', guardarConfig);
+
+  // Calcular automáticamente con el estado inicial para mostrar resultados precargados
+  try {
+    const res = calcular();
+    mostrarResultados(res);
+  } catch (e) {
+    // Si hay algún error con el estado inicial, no mostramos resultado
+    console.warn('Cálculo inicial:', e.message);
+  }
+});
+</script>
+</body>
+</html>
